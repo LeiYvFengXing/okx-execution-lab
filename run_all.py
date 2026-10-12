@@ -29,12 +29,14 @@ def main() -> int:
     ap.add_argument("--with-orderbook", action="store_true",
                     help="also run the live order-book cost study (needs network)")
     ap.add_argument("--csv", default=None, help="path to an OHLC CSV (default: bundled sample)")
+    ap.add_argument("--csv15m", default=None,
+                    help="path to a 15m OHLC CSV for study 4 (default: bundled 15m sample)")
     ap.add_argument("--bar", default="1H", choices=["1H", "1D"],
                     help="bar size of the CSV - controls the annualisation factor")
     ap.add_argument("--capital", type=float, default=1_000.0, help="starting capital for the grid")
     ap.add_argument("--fee", type=float, default=None, help="override the maker fee (e.g. 0.0008)")
     ap.add_argument("--skip", nargs="*", default=[],
-                    choices=["costs", "maker", "grid"], help="studies to skip")
+                    choices=["costs", "maker", "grid", "pierce"], help="studies to skip")
     args = ap.parse_args()
 
     from src import grid, maker_fill
@@ -45,7 +47,7 @@ def main() -> int:
 
     if args.with_orderbook and "costs" not in args.skip:
         from src import costs
-        banner("STUDY 1/3 - order-book cost decomposition (live snapshots)")
+        banner("STUDY 1/4 - order-book cost decomposition (live snapshots)")
         try:
             costs.run()
         except Exception as exc:  # noqa: BLE001
@@ -53,12 +55,17 @@ def main() -> int:
             print("  (this study needs network access; use OKX_HOST=... behind a firewall)")
 
     if "maker" not in args.skip:
-        banner("STUDY 2/3 - maker vs taker: fill rate and adverse selection")
+        banner("STUDY 2/4 - maker vs taker: fill rate and adverse selection")
         maker_fill.run(csv_path=args.csv, fee_maker=fee)
 
     if "grid" not in args.skip:
-        banner("STUDY 3/3 - grid trading vs a same-exposure control")
+        banner("STUDY 3/4 - grid trading vs a same-exposure control")
         grid.run(csv_path=args.csv, bar=args.bar, fee=fee, capital=args.capital)
+
+    if "pierce" not in args.skip:
+        banner("STUDY 4/4 - pierce vs touch: is the maker edge real? (15m data)")
+        from src import pierce
+        pierce.main(csv_path=args.csv15m)
 
     print()
     print(f"done in {time.time() - t0:.1f}s - figures in images/, tables in reports/")
